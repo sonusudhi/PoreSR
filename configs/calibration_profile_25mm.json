@@ -1,0 +1,100 @@
+{
+  "global_window": {
+    "p_low": 0.252136766910553,
+    "p_high": 0.6116504669189453,
+    "percentiles": [
+      0.5,
+      99.5
+    ],
+    "note": "Global window computed from 100 LR slices"
+  },
+  "radiometric": {
+    "method": "mean_std_matching_rock_only",
+    "intensity_mean": 0.4083068072795868,
+    "intensity_median": 0.36465030908584595,
+    "intensity_std": 0.21559512615203857,
+    "intensity_mad": 0.25894635915756226,
+    "intensity_percentiles": {
+      "p1": 0.10664249211549759,
+      "p5": 0.12526097893714905,
+      "p25": 0.2258511334657669,
+      "p50": 0.36465030908584595,
+      "p75": 0.5790619254112244,
+      "p95": 0.783729612827301,
+      "p99": 0.8808304071426392
+    },
+    "note": "From rock-only pixels with global windowing (preserves radiometry)"
+  },
+  "blur": {
+    "method": "stable_frequency_spectrum_matching_fixed",
+    "cutoff_10pct_median": 0.0078125,
+    "cutoff_10pct_range": [
+      0.05,
+      0.1078125
+    ],
+    "bandwidth_90_median": 0.0,
+    "bandwidth_90_range": [
+      0.1,
+      0.1
+    ],
+    "bandwidth_90_range_note": "Degenerate range expected for heavily low-pass real LR data where 90% cumulative energy is reached near DC.",
+    "rolloff_rate_median": 2.0,
+    "rolloff_rate_range": [
+      1.8,
+      3.1351592852826338
+    ],
+    "anisotropic_fraction_observed": 0.0,
+    "anisotropic_fraction_training": 0.05,
+    "anisotropic_ratio_range": [
+      1.5,
+      3.0
+    ],
+    "note": "Bandwidth from cumulative power (fixed)"
+  },
+  "noise": {
+    "poisson_peak_mean": 853.4803409080505,
+    "poisson_peak_range": [
+      100.0,
+      1654.9967578125002
+    ],
+    "poisson_peak_range_note": "Superseded - training used recalibrated range [8263, 15345] derived from HP residual sweep.",
+    "gaussian_sigma_mean": 0.014097928105324741,
+    "gaussian_sigma_range": [
+      0.0064,
+      0.02908952124416828
+    ],
+    "gaussian_sigma_note": "Gaussian noise disabled in final training. Poisson-only at recalibrated peak."
+  },
+  "bias_field": {
+    "amplitude_mean": 0.08106274157762527,
+    "amplitude_median": 0.01638604700565338,
+    "amplitude_range": [
+      0.0063895476050674915,
+      0.2694995403289795
+    ],
+    "dominant_scale_pixels": 64.0
+  },
+  "artifacts": {
+    "ring_artifact_probability": 0.05,
+    "ring_intensity_range": [
+      0.02,
+      0.08
+    ]
+  },
+  "metadata": {
+    "calibration_source": "25mm_LR Sherwood sandstone",
+    "n_patches_analyzed": 2000,
+    "n_intensity_pixels": 2000000,
+    "patch_size": 256,
+    "voxel_size_um": 10.6,
+    "fov_mm": 25.0,
+    "hr_voxel_size_um": 4.73,
+    "synthetic_lr_pixel_spacing_um": 18.92,
+    "synthetic_lr_pixel_spacing_note": "Derived from 4x downscale of HR (4 x 4.73 um). Not a physical acquisition voxel size.",
+    "downscale_factor": 4,
+    "date": "2026-01-31",
+    "method_version": "v6_final_fixed",
+    "windowing": "global_p0.5_p99.5",
+    "philosophy": "Global window + rock-only radiometry + fixed bandwidth"
+}
+}
