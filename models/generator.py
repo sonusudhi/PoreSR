@@ -34,7 +34,7 @@ class CBAM(nn.Module):
     Applies sequential channel and spatial attention to refine feature maps.
     The 7x7 spatial attention kernel at LR scale corresponds to a 28x28 pixel
     HR receptive field (132 um), ensuring attention operates at the scale of
-    entire pore throats in Bentheimer sandstone.
+    entire pore throats in Sherwood sandstone.
 
     Parameters
     ----------
