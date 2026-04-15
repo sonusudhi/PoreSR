@@ -72,6 +72,8 @@
       0.0063895476050674915,
       0.2694995403289795
     ],
+    "training_amplitude_cap": 0.006,
+  "training_note": "Observed LR bias amplitudes were not used directly. Final training applies a multiplicative B-spline bias field with amplitude capped at 0.006 (0.5 × σ_t) to preserve realistic low-frequency shading without overwhelming rock-phase contrast.",
     "dominant_scale_pixels": 64.0
   },
   "artifacts": {
