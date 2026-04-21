@@ -5,7 +5,7 @@ Runs inference on held-out test slices and computes image quality metrics
 (PSNR, SSIM, MS-SSIM, LPIPS) for all SR methods including bicubic baseline.
 
 Authors:
-    Sonu Sudhikumar Seena (1,2), Lin Ma (1), Anirban Chakraborty (2), Jingyue Hao (1)
+    Sonu Sudhikumar Seena (1), Anirban Chakraborty (2), Jingyue Hao (1), Lin Ma (1)
 
 Implementation:
     Sonu Sudhikumar Seena
