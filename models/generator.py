@@ -5,7 +5,7 @@ Modified SRResNet with optional CBAM attention for 2D and 2.5D
 super-resolution of rock micro-CT images.
 
 Authors:
-    Sonu Sudhikumar Seena (1,2), Lin Ma (1), Anirban Chakraborty (2), Jingyue Hao (1)
+    Sonu Sudhikumar Seena (1), Anirban Chakraborty (2), Jingyue Hao (1), Lin Ma (1)
 
 Implementation:
     Sonu Sudhikumar Seena
