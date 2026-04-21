@@ -2,7 +2,7 @@
 
 **Calibrated Degradation for Super-Resolution of Rock Micro-CT: Decoupling Image Fidelity from Petrophysical Accuracy**
 
-Sonu Sudhikumar Seena<sup>1,2</sup>, Lin Ma<sup>1</sup>, Anirban Chakraborty<sup>2</sup>, Jingyue Hao<sup>1</sup>
+Sonu Sudhikumar Seena<sup>1</sup>, Anirban Chakraborty<sup>2</sup>, Jingyue Hao<sup>1</sup>, Lin Ma<sup>1</sup>
 
 <sup>1</sup> Department of Chemical Engineering, The University of Manchester, UK  
 <sup>2</sup> Department of Computational and Data Sciences (CDS), Indian Institute of Science Bangalore, India
