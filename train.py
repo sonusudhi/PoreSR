@@ -12,7 +12,7 @@ Supports all four trained models in the ablation study:
     - PoreSR-GAN:    in_channels=5, use_cbam=True,  + Stage 2
 
 Authors:
-    Sonu Sudhikumar Seena (1,2), Lin Ma (1), Anirban Chakraborty (2), Jingyue Hao (1)
+    Sonu Sudhikumar Seena (1), Anirban Chakraborty (2), Jingyue Hao (1), Lin Ma (1)
 
 Implementation:
     Sonu Sudhikumar Seena
