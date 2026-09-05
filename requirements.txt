@@ -1,12 +1,16 @@
+# Core
 torch>=2.0.0
-torchvision>=0.15.0
 numpy>=1.24.0
 Pillow>=9.5.0
 scipy>=1.10.0
-scikit-image>=0.20.0
-pytorch-msssim>=1.0.0
-lpips>=0.1.4
+
+# Metrics
+scikit-image>=0.20.0        # PSNR, SSIM
+pytorch-msssim>=1.0.0       # MS-SSIM (training loss and evaluation)
+lpips>=0.1.4                # LPIPS perceptual distance
+torchvision>=0.15.0         # required by lpips, not imported directly
+
+# Image operations and reporting
+opencv-python>=4.7.0        # bicubic baseline in evaluate.py
+pandas>=2.0.0               # per-slice metrics tables
 tqdm>=4.65.0
-pandas>=2.0.0
-matplotlib>=3.7.0
-opencv-python>=4.7.0
