@@ -159,10 +159,15 @@ def run_inference(model, lr_stack, device, mixed_precision=True):
 
 
 def save_sr_slice(sr_np, output_dir, global_idx):
-    """Save an SR slice as 16-bit TIFF."""
+    """
+    Save an SR slice as an 8-bit TIFF.
+
+    Eight bits matches the HR and LR data and the grey-level scale on which
+    the GeoDict segmentation thresholds of Section 5.2 are defined.
+    """
     os.makedirs(output_dir, exist_ok=True)
-    sr_uint16 = (sr_np * 65535).astype(np.uint16)
-    Image.fromarray(sr_uint16).save(
+    sr_uint8 = (np.clip(sr_np, 0, 1) * 255).astype(np.uint8)
+    Image.fromarray(sr_uint8).save(
         os.path.join(output_dir, f"slice_{global_idx:04d}.tif")
     )
 
