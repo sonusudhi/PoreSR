@@ -4,26 +4,33 @@
 
 Sonu Sudhikumar Seena<sup>1</sup>, Anirban Chakraborty<sup>2</sup>, Jingyue Hao<sup>1</sup>, Lin Ma<sup>1</sup>
 
-<sup>1</sup> Department of Chemical Engineering, The University of Manchester, UK  
-<sup>2</sup> Department of Computational and Data Sciences (CDS), Indian Institute of Science Bangalore, India
+<sup>1</sup> Department of Chemical Engineering, The University of Manchester, Oxford Road, Manchester M13 9PL, UK
+<sup>2</sup> Department of Computational and Data Sciences (CDS), Indian Institute of Science Bangalore, Bangalore, Karnataka 560012, India
 
-Corresponding author: Sonu Sudhikumar Seena (sonu.sudhikumarseena@postgrad.manchester.ac.uk)
+Corresponding author: Lin Ma (lin.ma@manchester.ac.uk)
+Code contact: Sonu Sudhikumar Seena (sonu.sudhikumarseena@postgrad.manchester.ac.uk)
 
-Submitted to *Computers & Geosciences*, 2026.
+Under review at *Computers & Geosciences*, 2026.
 
 ---
 
 ## Overview
 
-PoreSR is a 2.5D residual network with CBAM attention for super-resolution of rock micro-CT images, trained on a calibrated degradation pipeline empirically derived from a real NXCT acquisition of Sherwood sandstone. The framework addresses the disconnect between image fidelity metrics and petrophysical transport properties in digital rock physics SR.
+PoreSR is a 2.5D residual network with CBAM attention for super-resolution of rock micro-CT images, trained on a degradation pipeline empirically calibrated against a real NXCT acquisition of Sherwood sandstone. The framework examines the relationship between image fidelity metrics and petrophysical transport properties in digital rock physics super-resolution.
 
-Key contributions:
+This repository contains the degradation pipeline, the six trained architectures, the training and evaluation code, and a synthetic worked example that runs end to end without the micro-CT dataset.
 
-- **Calibrated degradation pipeline**: Five-component pipeline (radiometric mapping, bias field, PSF blur, Lanczos downsampling, Poisson noise) calibrated against real 10.6 µm NXCT acquisition statistics.
-- **2.5D volumetric SR architecture**: Five-slice input stacks with CBAM attention preserve inter-slice pore connectivity, achieving a 4.3x permeability improvement over equivalent 2D architectures.
-- **Three-metric petrophysical validation**: Porosity, Stokes-flow permeability, and pore throat size distribution (D10, D50, D90) proposed as the minimum evaluation standard for digital rock physics SR.
+### What the study found
 
-## Repository Structure
+- **Calibrated degradation.** A five-component pipeline (radiometric mapping, bias field, PSF blur, Lanczos downsampling, Poisson noise) calibrated against a real 10.62 µm NXCT acquisition. In a matched end-to-end comparison against conventional bicubic degradation, calibration reduces the mean absolute directional permeability error of the degraded volume from 65.3% to 8.4%.
+
+- **Volumetric context and attention are non-additive.** A controlled 2×2 factorial varies five-slice input and CBAM attention independently. Neither component alone brings the mean absolute directional permeability error below 50%; together they reduce it to 15.8%.
+
+- **Image fidelity and transport fidelity are optimised by different architectures.** The highest-PSNR configuration in the study (SRResNet-2.5D, 39.22 dB) incurs a 51.9% mean absolute directional permeability error, while PoreSR gives up 0.21 dB and attains the lowest error of any method evaluated.
+
+- **No single petrophysical descriptor captures transport fidelity** across the reconstructions evaluated. Distinguishing their behaviour requires joint evaluation of porosity, directional permeability, and pore-throat-size distribution.
+
+## Repository structure
 
 ```
 PoreSR/
@@ -31,20 +38,23 @@ PoreSR/
 │   ├── config.json                    # Training hyperparameters
 │   ├── calibration_profile_25mm.json  # NXCT calibration parameters
 │   └── data_splits/
-│       ├── train_indices.txt          # 80% training split (4,182 slices)
-│       ├── val_indices.txt            # 10% validation split (519 slices)
-│       └── test_indices.txt           # 10% test split (520 slices)
+│       ├── train_indices.txt          # Training split (4182 slices)
+│       ├── val_indices.txt            # Validation split (519 slices)
+│       └── test_indices.txt           # Test split (520 slices; 516 evaluated)
 ├── data/
 │   └── dataset.py                     # 2D and 2.5D micro-CT data loader
 ├── degradation/
 │   └── pipeline.py                    # Calibrated degradation pipeline
 ├── losses/
-│   └── combined_loss.py               # L1 + MS-SSIM + Gradient loss
+│   └── combined_loss.py               # L1 + MS-SSIM + gradient loss
 ├── models/
-│   ├── generator.py                   # SRResNet + CBAM generator
+│   ├── generator.py                   # SRResNet backbone, CBAM, 2.5D input
 │   └── discriminator.py               # PatchGAN discriminator
 ├── utils/
 │   └── checkpoint.py                  # Checkpoint manager
+├── examples/
+│   ├── synthetic_demo.py              # End-to-end run on synthetic data
+│   └── data/                          # Small synthetic volume for testing
 ├── train.py                           # Training script (Stage 1 + Stage 2)
 ├── evaluate.py                        # Inference and metrics computation
 ├── requirements.txt                   # Python dependencies
@@ -60,17 +70,41 @@ cd PoreSR
 pip install -r requirements.txt
 ```
 
-Tested with Python 3.10, PyTorch 2.1, CUDA 12.1 on NVIDIA A100 (40 GB).
+### Computational requirements
 
-## Data Preparation
+| Requirement | Specification |
+|---|---|
+| Python | 3.10 |
+| PyTorch | 2.0 or later |
+| CUDA | 12.1 |
+| GPU memory | 16 GB minimum |
+| Tested on | NVIDIA A100 (40 GB) |
+| Stage 1 training | 80 000 steps per architecture |
+| Stage 2 fine-tuning | 5000 steps |
 
-### HR Ground Truth
+The synthetic worked example in `examples/` runs on CPU and requires no GPU.
 
-Place HR Sherwood sandstone micro-CT slices (1792 x 1792 px, 4.73 µm voxel, 16-bit TIFF) in a directory with naming convention `slice_0000.tif` through `slice_5232.tif`.
+## Quick start
 
-### Synthetic LR Generation
+To verify the installation without the micro-CT dataset, run the synthetic example. It generates a small volume, applies the calibrated degradation pipeline, runs a short training loop, and reports reconstruction metrics.
 
-Generate calibrated synthetic LR images using the degradation pipeline:
+```bash
+python examples/synthetic_demo.py
+```
+
+Expected behaviour: the script completes in a few minutes on CPU and writes reconstructed slices and a metrics summary to `examples/output/`. It is a functional test of the pipeline, not a reproduction of the published results, which require the full HR dataset.
+
+## Data preparation
+
+### HR ground truth
+
+The Sherwood sandstone micro-CT dataset is not distributed with this repository. See *Data availability* below.
+
+Place HR slices (1792 × 1792 px, 4.73 µm voxel, 16-bit TIFF) in a directory using the naming convention `slice_0000.tif` through `slice_5232.tif`.
+
+### Synthetic LR generation
+
+Synthetic low-resolution training data is generated from HR by the calibrated degradation pipeline. Degradation is applied in-plane only, so slice spacing remains 4.73 µm while in-plane resolution becomes 18.92 µm.
 
 ```python
 from degradation.pipeline import generate_synthetic_lr, load_calibration_profile
@@ -85,112 +119,152 @@ generate_synthetic_lr(
 )
 ```
 
+The calibration profile is specific to the University of Manchester NXCT instrument and this acquisition setting. Applying the pipeline to a different instrument requires re-deriving the parameters; the procedure is described in Section 3.4 of the manuscript.
+
 ## Training
 
-Train any of the four model variants:
+Six trained architectures are available. The four factorial cells differ only in the two factors under test.
 
 ```bash
-# PoreSR (2.5D + CBAM, Stage 1 only)
-python train.py \
-    --config configs/config.json \
-    --model PoreSR \
-    --output_dir outputs/PoreSR \
-    --data_splits_dir configs/data_splits
+# --- 2x2 factorial ---
 
-# PoreSR-GAN (2.5D + CBAM, Stage 1 + Stage 2)
-python train.py \
-    --config configs/config.json \
-    --model PoreSR_GAN \
-    --output_dir outputs/PoreSR_GAN \
-    --data_splits_dir configs/data_splits
+# SRResNet-2D: single slice, no CBAM
+python train.py --config configs/config.json --model SRResNet_2D \
+    --output_dir outputs/SRResNet_2D --data_splits_dir configs/data_splits
 
-# SRResNet-2D (ablation baseline)
-python train.py \
-    --config configs/config.json \
-    --model SRResNet_2D \
-    --output_dir outputs/SRResNet_2D \
-    --data_splits_dir configs/data_splits
+# SRResNet-2D-CBAM: single slice, CBAM
+python train.py --config configs/config.json --model SRResNet_2D_CBAM \
+    --output_dir outputs/SRResNet_2D_CBAM --data_splits_dir configs/data_splits
 
-# SRGAN-2D (ablation baseline)
-python train.py \
-    --config configs/config.json \
-    --model SRGAN_2D \
-    --output_dir outputs/SRGAN_2D \
-    --data_splits_dir configs/data_splits
+# SRResNet-2.5D: five slices, no CBAM
+python train.py --config configs/config.json --model SRResNet_2_5D \
+    --output_dir outputs/SRResNet_2_5D --data_splits_dir configs/data_splits
+
+# PoreSR: five slices, CBAM
+python train.py --config configs/config.json --model PoreSR \
+    --output_dir outputs/PoreSR --data_splits_dir configs/data_splits
+
+# --- Adversarial variants (Stage 1 + Stage 2) ---
+
+# SRGAN-2D: adversarial fine-tuning of SRResNet-2D
+python train.py --config configs/config.json --model SRGAN_2D \
+    --output_dir outputs/SRGAN_2D --data_splits_dir configs/data_splits
+
+# PoreSR-GAN: adversarial fine-tuning of PoreSR
+python train.py --config configs/config.json --model PoreSR_GAN \
+    --output_dir outputs/PoreSR_GAN --data_splits_dir configs/data_splits
 ```
 
-### Training Configuration
+### Options
+
+| Argument | Required | Description |
+|---|---|---|
+| `--config` | yes | Path to the training configuration JSON |
+| `--model` | yes | One of `SRResNet_2D`, `SRResNet_2D_CBAM`, `SRResNet_2_5D`, `PoreSR`, `SRGAN_2D`, `PoreSR_GAN` |
+| `--output_dir` | yes | Directory for checkpoints and training logs |
+| `--data_splits_dir` | yes | Directory containing the three index files |
+
+**Outputs.** Each run writes `checkpoint_best.pth` (selected by best validation MS-SSIM), periodic checkpoints, and a training log to `--output_dir`.
+
+### Training configuration
 
 | Parameter | Value |
-|-----------|-------|
-| Total steps (Stage 1) | 80,000 |
-| GAN steps (Stage 2) | 5,000 |
+|---|---|
+| Stage 1 steps | 80 000 |
+| Stage 2 steps | 5000 |
 | Batch size | 16 (A100) |
-| Patch size | 64 x 64 (LR) / 256 x 256 (HR) |
-| Learning rate | 2e-4 (warmup 5,000 steps, cosine to 5e-5) |
-| Loss weights | L1: 1.0, MS-SSIM: 0.1, Gradient: 0.01 |
-| GAN adversarial weight | 0.001 |
+| Patch size | 64 × 64 (LR) / 256 × 256 (HR) |
+| Learning rate | 2e-4, warmup 5000 steps, cosine to 5e-5 |
+| Loss weights | L1 1.0, MS-SSIM 0.1, gradient 0.01 |
+| Adversarial weight | 0.001 |
+| Stage 2 generator / discriminator LR | 1e-5 / 4e-5 |
+
+The four factorial cells share identical training data, loss, optimiser schedule, and backbone. CBAM contributes 9760 parameters and the five-slice input 20 736, so trainable parameter count varies by 2.0% across the four cells. The PoreSR generator contains 1 554 996 trainable parameters.
 
 ## Evaluation
 
 ```bash
-# Evaluate PoreSR
-python evaluate.py \
-    --config configs/config.json \
-    --model PoreSR \
+# Any trained model
+python evaluate.py --config configs/config.json --model PoreSR \
     --checkpoint outputs/PoreSR/checkpoint_best.pth \
-    --data_splits_dir configs/data_splits \
-    --output_dir results/
+    --data_splits_dir configs/data_splits --output_dir results/
 
-# Evaluate bicubic baseline
-python evaluate.py \
-    --config configs/config.json \
-    --model Bicubic \
-    --data_splits_dir configs/data_splits \
-    --output_dir results/
+# Non-learned bicubic baseline (no checkpoint required)
+python evaluate.py --config configs/config.json --model Bicubic \
+    --data_splits_dir configs/data_splits --output_dir results/
 ```
+
+**Inputs.** A trained checkpoint (except for `Bicubic`), the synthetic LR test slices, and the corresponding HR slices.
+
+**Outputs.** Reconstructed 16-bit TIFF slices for the 516-slice test set, and a JSON metrics summary containing PSNR, SSIM, MS-SSIM, and LPIPS.
+
+Petrophysical evaluation (porosity, Stokes–Brinkman permeability, pore-throat-size distribution) was performed in GeoDict, which is commercial software and not included here. Reconstructed volumes written by `evaluate.py` are the input to that stage. Segmentation used GeoDict hysteresis thresholding at the automatic estimate minus 1.0 grey-level unit, applied identically to every volume.
 
 ## Results
 
-Evaluated on 516 held-out test slices with GeoDict petrophysical simulation:
+Evaluated on 516 held-out test slices. HR reference permeabilities are *K*x = 459.72, *K*y = 518.60, *K*z = 181.30 mD (1 mD = 9.869 × 10⁻¹⁶ m²).
 
-| Method | PSNR (dB) | K_z (mDarcy) | K Error (%) |
-|--------|-----------|--------------|-------------|
-| HR Ground Truth | -- | 132.72 | -- |
-| Bicubic | 34.69 | 81.28 | -38.8 |
-| SRResNet-2D | 37.70 | 22.30 | -83.2 |
-| SRGAN-2D | 37.89 | 30.73 | -76.9 |
-| **PoreSR** | **39.01** | **95.54** | **-28.0** |
-| PoreSR-GAN | 38.66 | 72.20 | -45.6 |
+| Method | PSNR (dB) | *K*x (mD) | *K*y (mD) | *K*z (mD) | Mean abs. directional error (%) |
+|---|---|---|---|---|---|
+| HR reference | — | 459.72 | 518.60 | 181.30 | — |
+| Bicubic | 34.69 | 353.62 | 385.98 | 104.80 | 30.3 |
+| SRResNet-2D | 37.70 | 249.72 | 282.35 | 28.54 | 58.5 |
+| SRGAN-2D | 37.89 | 311.12 | 338.55 | 39.27 | 48.5 |
+| SRResNet-2D-CBAM | 38.22 | 272.17 | 293.87 | 34.83 | 55.0 |
+| SRResNet-2.5D | **39.22** | 759.96 | 857.15 | 226.95 | 51.9 |
+| **PoreSR** | 39.01 | 491.36 | 552.39 | 119.79 | **15.8** |
+| PoreSR-GAN | 38.66 | 411.83 | 470.26 | 94.68 | 22.5 |
 
-PoreSR is the only method to achieve joint optimality in both image quality and petrophysical accuracy.
+Mean absolute directional error is the equally weighted mean of absolute relative errors in *K*x, *K*y and *K*z. It is a descriptive summary of three-direction transport accuracy, not a petrophysical property.
 
-## Ablation Design
+No method achieves both the highest image fidelity and the lowest permeability error. SRResNet-2.5D attains the highest PSNR while ranking fifth of seven on permeability accuracy, and is the only reconstruction to overestimate permeability in all three directions.
 
-The five-method comparison is structured as a controlled ablation:
+## Experimental design
 
-- **Bicubic**: Non-learned baseline.
-- **SRResNet-2D**: 2D backbone, no CBAM, reconstruction loss only.
-- **SRGAN-2D**: 2D backbone, no CBAM, + adversarial fine-tuning.
-- **PoreSR**: 2.5D (K=5), CBAM attention, reconstruction loss only.
-- **PoreSR-GAN**: 2.5D (K=5), CBAM attention, + adversarial fine-tuning.
+Seven reconstruction methods: six trained models and one non-learned baseline.
 
-All trained models use identical calibrated degradation data and hyperparameters.
+### 2×2 factorial
+
+Mean absolute directional permeability error, with the two factors varied independently:
+
+| | No CBAM | CBAM |
+|---|---|---|
+| **1 slice (2D)** | SRResNet-2D — 58.5% | SRResNet-2D-CBAM — 55.0% |
+| **5 slices (2.5D)** | SRResNet-2.5D — 51.9% | PoreSR — **15.8%** |
+
+Estimating the interaction as the difference between the effect of adding CBAM in the 2.5D configuration and in the 2D configuration gives −63.3, −61.0 and −62.6 percentage points in X, Y and Z. These are descriptive point estimates from single training runs rather than formally estimated factorial effects.
+
+### Other methods
+
+- **Bicubic** — non-learned baseline.
+- **SRGAN-2D** — adversarial fine-tuning of SRResNet-2D.
+- **PoreSR-GAN** — adversarial fine-tuning of PoreSR. Included to quantify the adversarial response, not proposed as a recommended method for petrophysical applications.
+
+All trained models use the same calibrated degradation data and hyperparameters.
+
+## Data availability
+
+The Sherwood sandstone micro-CT dataset was acquired at the University of Manchester NXCT facility and is not distributed with this repository. Access enquiries should be directed to the corresponding author.
+
+The synthetic worked example in `examples/` allows the degradation pipeline, model definitions, training loop, and evaluation code to be exercised end to end without it.
+
+## Limitations
+
+Validation is internal to a single Sherwood sandstone specimen. No cross-sample, cross-instrument, or cross-lithology testing was performed. Calibration parameters are specific to the University of Manchester NXCT instrument and this acquisition setting, and residual mismatches in noise amplitude and low-frequency bias remain. Permeability was computed with the LIR solver alone and without comparison against laboratory measurement. Each architecture is a single trained model without seed replication. See Section 6.6 of the manuscript for the full statement.
 
 ## Citation
 
-If you use this code, please cite:
-
 ```bibtex
-@article{sudhikumarseena2026poresr,
-  title={Calibrated Degradation for Super-Resolution of Rock Micro-CT: 
-         Decoupling Image Fidelity from Petrophysical Accuracy},
-  author={Sudhikumar Seena, Sonu and Ma, Lin and Chakraborty, Anirban and Hao, Jingyue},
-  journal={Computers \& Geosciences},
-  year={2026}
+@article{seena2026poresr,
+  title   = {Calibrated Degradation for Super-Resolution of Rock Micro-CT:
+             Decoupling Image Fidelity from Petrophysical Accuracy},
+  author  = {Sudhikumar Seena, Sonu and Chakraborty, Anirban and
+             Hao, Jingyue and Ma, Lin},
+  journal = {Computers \& Geosciences},
+  year    = {2026}
 }
 ```
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+MIT License. See [LICENSE](LICENSE) for details.
