@@ -100,7 +100,7 @@ Expected behaviour: the script completes in a few minutes on CPU and writes reco
 
 The Sherwood sandstone micro-CT dataset is not distributed with this repository. See *Data availability* below.
 
-Place HR slices (1792 × 1792 px, 4.73 µm voxel, 16-bit TIFF) in a directory using the naming convention `slice_0000.tif` through `slice_5232.tif`.
+Place HR slices (1792 × 1792 px, 4.73 µm voxel, 8-bit TIFF) in a directory using the naming convention `slice_0000.tif` through `slice_5232.tif`.
 
 ### Synthetic LR generation
 
@@ -196,7 +196,7 @@ python evaluate.py --config configs/config.json --model Bicubic \
 
 **Inputs.** A trained checkpoint (except for `Bicubic`), the synthetic LR test slices, and the corresponding HR slices.
 
-**Outputs.** Reconstructed 16-bit TIFF slices for the 516-slice test set, and a JSON metrics summary containing PSNR, SSIM, MS-SSIM, and LPIPS.
+**Outputs.** Reconstructed 8-bit TIFF slices for the 516-slice test set, and a JSON metrics summary containing PSNR, SSIM, MS-SSIM, and LPIPS.
 
 Petrophysical evaluation (porosity, Stokes–Brinkman permeability, pore-throat-size distribution) was performed in GeoDict, which is commercial software and not included here. Reconstructed volumes written by `evaluate.py` are the input to that stage. Segmentation used GeoDict hysteresis thresholding at the automatic estimate minus 1.0 grey-level unit, applied identically to every volume.
 
