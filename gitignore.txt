@@ -1,0 +1,20 @@
+# Demo and run outputs
+examples/output/
+outputs/
+results/
+
+# Checkpoints and reconstructions
+*.pth
+*.tif
+*.tiff
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# OS
+.DS_Store
+._*
