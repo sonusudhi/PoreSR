@@ -384,8 +384,12 @@ def generate_synthetic_lr(hr_dir, calib_profile, output_dir, k_slices=5):
 
         lr_img = degrade_single_slice(hr_img, blur_params, nb_params)
 
-        lr_uint16 = (lr_img * 65535).astype(np.uint16)
-        Image.fromarray(lr_uint16).save(out_path)
+        # 8-bit, matching the LR data used for training. The loaders read
+        # slices with PIL convert("L"), which clips 16-bit values at 255
+        # rather than rescaling, so a 16-bit file would be read back
+        # saturated.
+        lr_uint8 = (np.clip(lr_img, 0, 1) * 255).astype(np.uint8)
+        Image.fromarray(lr_uint8).save(out_path)
         generated += 1
 
     print(f"Generated: {generated}, Skipped (existing): {skipped}")
