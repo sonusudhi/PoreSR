@@ -130,16 +130,23 @@ def make_synthetic_volume(n_slices, size, seed=0):
     return np.clip(volume, 0.0, 1.0)
 
 
-def save_uint16(arr, path):
-    """Save a float array in [0, 1] as a 16-bit TIFF."""
-    Image.fromarray((np.clip(arr, 0, 1) * 65535).astype(np.uint16)).save(path)
+def save_slice(arr, path):
+    """
+    Save a float array in [0, 1] as an 8-bit TIFF.
+
+    Eight bits is used deliberately. The loaders in data/dataset.py and
+    evaluate.py read slices with PIL convert("L"), which clips 16-bit values
+    at 255 rather than rescaling them, so a 16-bit file would be read back as
+    a saturated binary image.
+    """
+    Image.fromarray((np.clip(arr, 0, 1) * 255).astype(np.uint8)).save(path)
 
 
 def write_hr_slices(volume, hr_dir):
     """Write the synthetic HR volume to disk in the expected naming scheme."""
     hr_dir.mkdir(parents=True, exist_ok=True)
     for i, sl in enumerate(volume):
-        save_uint16(sl, hr_dir / f"slice_{i:04d}.tif")
+        save_slice(sl, hr_dir / f"slice_{i:04d}.tif")
 
 
 def degrade_volume(volume, lr_dir, calib):
@@ -158,7 +165,7 @@ def degrade_volume(volume, lr_dir, calib):
         np.random.seed(42 + i)
         noise_bias = sample_noise_bias_params(calib)
         lr = degrade_single_slice(sl, blur, noise_bias)
-        save_uint16(lr, lr_dir / f"slice_{i:04d}.tif")
+        save_slice(lr, lr_dir / f"slice_{i:04d}.tif")
 
 
 def write_splits(n_slices, splits_dir):
@@ -191,9 +198,9 @@ def write_splits(n_slices, splits_dir):
 def bicubic_upsample(lr, scale=UPSCALE):
     """Upsample an LR slice by bicubic interpolation, for the baseline."""
     h, w = lr.shape
-    img = Image.fromarray((np.clip(lr, 0, 1) * 65535).astype(np.uint16))
+    img = Image.fromarray((np.clip(lr, 0, 1) * 255).astype(np.uint8))
     up = img.resize((w * scale, h * scale), Image.BICUBIC)
-    return np.array(up, dtype=np.float32) / 65535.0
+    return np.array(up, dtype=np.float32) / 255.0
 
 
 def load_float(path):
