@@ -49,7 +49,7 @@
       1.5,
       3.0
     ],
-    "note": "Bandwidth from cumulative power (fixed)"
+    "note": "Bandwidth from cumulative power (fixed). Read by pipeline.sample_blur_params: cutoff_10pct_range, bandwidth_90_range and rolloff_rate_range select and scale the blur width; anisotropic_fraction_training and anisotropic_ratio_range control anisotropy."
   },
   "noise": {
     "poisson_peak_mean": 853.4803409080505,
@@ -63,7 +63,8 @@
       0.0064,
       0.02908952124416828
     ],
-    "gaussian_sigma_note": "Gaussian noise disabled in final training. Poisson-only at recalibrated peak."
+    "gaussian_sigma_note": "Gaussian noise disabled in final training. Poisson-only at recalibrated peak.",
+    "note": "Not read by pipeline.py. The Poisson peak range used in training is hard-coded in pipeline.py as [8263, 15345]; editing the values here has no effect."
   },
   "bias_field": {
     "amplitude_mean": 0.08106274157762527,
@@ -73,22 +74,23 @@
       0.2694995403289795
     ],
     "training_amplitude_cap": 0.006,
-  "training_note": "Observed LR bias amplitudes were not used directly. Final training applies a multiplicative B-spline bias field with amplitude capped at 0.006 (0.5 × σ_t) to preserve realistic low-frequency shading without overwhelming rock-phase contrast.",
-    "dominant_scale_pixels": 64.0
+    "dominant_scale_pixels": 64.0,
+    "training_note": "Observed LR bias amplitudes were not used directly. Final training applies a multiplicative B-spline bias field with amplitude capped at 0.006 (0.5 \u00d7 \u03c3_t) to preserve realistic low-frequency shading without overwhelming rock-phase contrast."
   },
   "artifacts": {
     "ring_artifact_probability": 0.05,
     "ring_intensity_range": [
       0.02,
       0.08
-    ]
+    ],
+    "note": "Not read by pipeline.py. Ring artefact simulation is disabled because no visible ring artefacts were observed in the real LR acquisition at this magnification; these values are retained only as a record of the observed statistics."
   },
   "metadata": {
     "calibration_source": "25mm_LR Sherwood sandstone",
     "n_patches_analyzed": 2000,
     "n_intensity_pixels": 2000000,
     "patch_size": 256,
-    "voxel_size_um": 10.6,
+    "voxel_size_um": 10.62,
     "fov_mm": 25.0,
     "hr_voxel_size_um": 4.73,
     "synthetic_lr_pixel_spacing_um": 18.92,
@@ -98,5 +100,5 @@
     "method_version": "v6_final_fixed",
     "windowing": "global_p0.5_p99.5",
     "philosophy": "Global window + rock-only radiometry + fixed bandwidth"
-}
+  }
 }
