@@ -98,9 +98,9 @@ class MicroCTDataset(Dataset):
     def _load_slice(self, root, global_idx):
         """Load a single TIFF slice as a float32 tensor in [0, 1]."""
         path = os.path.join(root, f"slice_{global_idx:04d}.tif")
-        # convert("L") returns an 8-bit greyscale image, so 16-bit TIFF input
-        # is reduced to 8 bits here. This matches the loading used to produce
-        # the published results and must not be changed without retraining.
+        # The HR and LR slices are 8-bit greyscale, so convert("L") is a
+        # no-op on them. Note that it clips rather than rescales 16-bit
+        # input, so slices must be written at 8 bits.
         img = Image.open(path).convert("L")
         arr = np.array(img, dtype=np.float32)
 
