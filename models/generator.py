@@ -52,10 +52,11 @@ class CBAM(nn.Module):
     Convolutional Block Attention Module (Woo et al., 2018).
 
     Applies sequential channel and spatial attention to refine feature maps.
-    The 7x7 spatial attention kernel at LR scale corresponds to a 28x28 pixel
-    HR receptive field of approximately 132 um, some 6.5 times the HR D50 of
-    20.18 um for this sample. The attention window therefore spans several
-    characteristic pore-throat widths rather than a single throat.
+    The 7x7 spatial attention kernel operates at LR scale and therefore
+    corresponds to 28x28 pixels of HR-equivalent spatial support, about
+    132 um, some 6.5 times the HR D50 of 20.18 um for this sample. The
+    attention window therefore spans several characteristic pore-throat
+    widths rather than a single throat.
 
     Parameters
     ----------
