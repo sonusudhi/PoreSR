@@ -202,7 +202,9 @@ python evaluate.py --config configs/config.json --model Bicubic \
 
 **Inputs.** A trained checkpoint (except for `Bicubic`), the synthetic LR test slices, and the corresponding HR slices.
 
-**Outputs.** Reconstructed 8-bit TIFF slices for the 516-slice test set, and a JSON metrics summary containing PSNR, SSIM, MS-SSIM, and LPIPS.
+**Outputs.** Reconstructed 8-bit TIFF slices for the 516-slice test set, a per-slice CSV, and `<model>_metrics_summary.json` giving the model, checkpoint, slice count, and mean and standard deviation of PSNR, SSIM, MS-SSIM and LPIPS.
+
+Full slices are reconstructed from overlapping 64 x 64 LR patches on a stride of 48, with overlapping predictions averaged uniformly. Metrics are computed on the saved 8-bit reconstructions rather than on the float network output, so that they include the same quantisation as the reported results.
 
 Petrophysical evaluation (porosity, Stokes–Brinkman permeability, pore-throat-size distribution) was performed in GeoDict, which is commercial software and not included here. Reconstructed volumes written by `evaluate.py` are the input to that stage. Segmentation used GeoDict hysteresis thresholding at the automatic estimate minus 1.0 grey-level unit, applied identically to every volume.
 

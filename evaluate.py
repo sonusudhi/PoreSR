@@ -55,6 +55,11 @@ from models.generator import GENERATOR_CONFIGS, build_generator
 # that all seven are scored on an identical slice set.
 EVAL_MARGIN = max(c["in_channels"] for c in GENERATOR_CONFIGS.values()) // 2
 
+# Sliding-window reconstruction geometry, as used for the reported results.
+UPSCALE = 4
+PATCH_SIZE_LR = 64
+PATCH_OVERLAP_LR = 16   # stride 48
+
 
 def load_indices(path):
     """Load slice indices from a text file."""
@@ -129,33 +134,82 @@ def compute_metrics(sr_np, hr_np, lpips_model, device):
     }
 
 
-def run_inference(model, lr_stack, device, mixed_precision=True):
+def _patch_origins(extent, patch, stride):
     """
-    Run SR inference on a single LR input stack.
+    Sliding-window start positions covering an axis of the given extent.
+
+    Positions run from 0 in steps of stride while a full patch fits. When the
+    final position does not reach the edge, one further position flush with
+    the edge is appended so that no strip is left unreconstructed. For the
+    448-pixel LR slices used in the paper the loop already lands exactly on
+    the edge, so no extra position is added and behaviour is unchanged.
+    """
+    origins = list(range(0, extent - patch + 1, stride))
+    if origins and origins[-1] != extent - patch:
+        origins.append(extent - patch)
+    return origins or [0]
+
+
+def run_inference(model, lr_stack, device, mixed_precision=True,
+                  patch_size_lr=PATCH_SIZE_LR, overlap=PATCH_OVERLAP_LR):
+    """
+    Reconstruct a full slice from overlapping LR patches.
+
+    The generator is applied to patch_size_lr x patch_size_lr LR patches taken
+    on a stride of (patch_size_lr - overlap), each producing a 4x larger SR
+    patch. Overlapping predictions are accumulated with uniform weight and
+    divided by the number of contributions, which is the procedure used to
+    produce the reported reconstructions. Uniform averaging is used
+    deliberately; no windowed or Gaussian blending is applied.
 
     Parameters
     ----------
     model : SRResNet
-        Trained generator model.
+        Trained generator.
     lr_stack : ndarray
         LR input, shape (K, H, W) for 2.5D or (1, H, W) for 2D.
     device : torch.device
         Computation device.
+    mixed_precision : bool
+        Whether to run the forward passes under autocast.
+    patch_size_lr : int
+        LR patch size in pixels. Default 64.
+    overlap : int
+        Overlap between adjacent LR patches in pixels. Default 16, giving a
+        stride of 48.
 
     Returns
     -------
     ndarray
         SR output, shape (H*4, W*4), float32 in [0, 1].
     """
-    lr_tensor = torch.from_numpy(lr_stack).unsqueeze(0).to(device)
+    _, h_lr, w_lr = lr_stack.shape
+    scale = UPSCALE
+    patch_size_hr = patch_size_lr * scale
+    stride = patch_size_lr - overlap
+
+    lr_tensor = torch.from_numpy(lr_stack).to(device)
+    sr_full = torch.zeros(1, h_lr * scale, w_lr * scale)
+    weight_map = torch.zeros(1, h_lr * scale, w_lr * scale)
 
     model.eval()
     with torch.no_grad():
-        with autocast(enabled=mixed_precision):
-            sr_tensor = model(lr_tensor)
+        for i in _patch_origins(h_lr, patch_size_lr, stride):
+            for j in _patch_origins(w_lr, patch_size_lr, stride):
+                patch = lr_tensor[:, i:i + patch_size_lr,
+                                  j:j + patch_size_lr].unsqueeze(0)
+                with autocast(enabled=mixed_precision):
+                    sr_patch = model(patch)
+                sr_patch = sr_patch.squeeze(0).cpu().float()
 
-    sr_np = sr_tensor.squeeze().cpu().float().numpy()
-    return np.clip(sr_np, 0, 1)
+                i_hr, j_hr = i * scale, j * scale
+                sr_full[:, i_hr:i_hr + patch_size_hr,
+                        j_hr:j_hr + patch_size_hr] += sr_patch
+                weight_map[:, i_hr:i_hr + patch_size_hr,
+                           j_hr:j_hr + patch_size_hr] += 1
+
+    sr_full = sr_full / weight_map.clamp(min=1)
+    return np.clip(sr_full.squeeze().numpy(), 0, 1)
 
 
 def save_sr_slice(sr_np, output_dir, global_idx):
@@ -205,12 +259,15 @@ def evaluate_model(model, config, test_indices, device, output_dir,
         # Load HR ground truth (centre slice)
         hr_np = load_slice(config["data_root_hr"], centre_idx)
 
-        # Inference on full LR slice
+        # Reconstruct, then save as 8-bit before scoring. Metrics are
+        # computed on the reopened file so that they include the same 8-bit
+        # quantisation as the reported results, which were measured from the
+        # saved reconstructions rather than from the float network output.
         sr_np = run_inference(model, lr_stack, device,
                               config["mixed_precision"])
         save_sr_slice(sr_np, sr_dir, centre_idx)
+        sr_np = load_slice(sr_dir, centre_idx)
 
-        # Metrics on full slice
         metrics = compute_metrics(sr_np, hr_np, lpips_model, device)
         metrics["slice_idx"] = centre_idx
         all_metrics.append(metrics)
@@ -232,11 +289,10 @@ def evaluate_bicubic(config, test_indices, output_dir, lpips_model, device):
         lr_np = load_slice(config["data_root_lr"], centre_idx)
         hr_np = load_slice(config["data_root_hr"], centre_idx)
 
-        sr_np = bicubic_upsample(lr_np)
-        sr_np = np.clip(sr_np, 0, 1)
+        sr_np = np.clip(bicubic_upsample(lr_np), 0, 1)
         save_sr_slice(sr_np, sr_dir, centre_idx)
+        sr_np = load_slice(sr_dir, centre_idx)
 
-        # Metrics on full slice
         metrics = compute_metrics(sr_np, hr_np, lpips_model, device)
         metrics["slice_idx"] = centre_idx
         all_metrics.append(metrics)
@@ -311,6 +367,20 @@ def main():
     df.to_csv(os.path.join(metrics_dir, f"{args.model}_per_slice.csv"),
               index=False)
 
+    # Aggregate summary, as described in the README
+    summary = {
+        "model": args.model,
+        "checkpoint": args.checkpoint,
+        "n_slices": int(len(df)),
+    }
+    for metric in ("psnr", "ssim", "ms_ssim", "lpips"):
+        summary[f"{metric}_mean"] = float(df[metric].mean())
+        summary[f"{metric}_std"] = float(df[metric].std())
+
+    summary_path = os.path.join(metrics_dir, f"{args.model}_metrics_summary.json")
+    with open(summary_path, "w") as f:
+        json.dump(summary, f, indent=2)
+
     # Print summary
     print(f"\n{'=' * 60}")
     print(f"{args.model} Results ({len(df)} slices)")
@@ -320,6 +390,7 @@ def main():
     print(f"  MS-SSIM: {df['ms_ssim'].mean():.4f} +/- {df['ms_ssim'].std():.4f}")
     print(f"  LPIPS:   {df['lpips'].mean():.3f} +/- {df['lpips'].std():.3f}")
     print(f"{'=' * 60}")
+    print(f"Summary written to {summary_path}")
 
 
 if __name__ == "__main__":
