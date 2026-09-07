@@ -221,9 +221,9 @@ def sample_blur_params(calib_profile):
     consecutive slices and resampled between blocks (Section 3.3), which is
     how generate_synthetic_lr seeds them. Note that this is a block-wise
     scheme, not a per-stack one: a 2.5D input stack whose centre slice lies
-    near a block boundary spans two PSF realisations. The CT point-spread
-    function is set by detector geometry and the reconstruction kernel, so it
-    does not vary slice to slice within a single scan.
+    near a block boundary spans two PSF realisations. Holding the PSF fixed
+    within each K-slice block preserves short-range consistency while allowing
+    calibrated blur variability across the training volume.
     """
     blur_cfg = calib_profile["blur"]
 
@@ -389,9 +389,13 @@ def generate_synthetic_lr(hr_dir, calib_profile, output_dir, k_slices=5):
 
         # The global RNG is reseeded per slice so that generation is
         # deterministic and can be resumed: rerunning any slice reproduces the
-        # same LR image. Blur is seeded per K-block so that a stack shares one
-        # PSF; noise and bias are seeded per slice, and that seed also governs
-        # the bias field, Poisson and background draws inside
+        # same LR image.
+        #
+        # Blur is seeded per non-overlapping K-slice block so that each block
+        # shares one PSF realisation; a sliding 2.5D stack crossing a block
+        # boundary can therefore contain slices from two PSF realisations.
+        # Noise and bias are seeded per slice, and that seed also governs the
+        # bias field, Poisson and background draws inside
         # degrade_single_slice.
         np.random.seed(42 + (idx // k_slices))
         blur_params = sample_blur_params(calib_profile)
