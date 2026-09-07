@@ -144,14 +144,19 @@ python train.py --config configs/config.json --model SRResNet_2_5D \
 python train.py --config configs/config.json --model PoreSR \
     --output_dir outputs/PoreSR --data_splits_dir configs/data_splits
 
-# --- Adversarial variants (Stage 1 + Stage 2) ---
+# --- Stage 2: adversarial fine-tuning ---
+# These do not retrain a backbone. Each loads the selected Stage 1 checkpoint
+# of its corresponding model and runs 5000 adversarial steps, so the Stage 1
+# run above must be completed first.
 
-# SRGAN-2D: adversarial fine-tuning of SRResNet-2D
+# SRGAN-2D: fine-tunes SRResNet-2D
 python train.py --config configs/config.json --model SRGAN_2D \
+    --stage1_checkpoint outputs/SRResNet_2D/checkpoint_best.pth \
     --output_dir outputs/SRGAN_2D --data_splits_dir configs/data_splits
 
-# PoreSR-GAN: adversarial fine-tuning of PoreSR
+# PoreSR-GAN: fine-tunes PoreSR
 python train.py --config configs/config.json --model PoreSR_GAN \
+    --stage1_checkpoint outputs/PoreSR/checkpoint_best.pth \
     --output_dir outputs/PoreSR_GAN --data_splits_dir configs/data_splits
 ```
 
@@ -163,8 +168,9 @@ python train.py --config configs/config.json --model PoreSR_GAN \
 | `--model` | yes | One of `SRResNet_2D`, `SRResNet_2D_CBAM`, `SRResNet_2_5D`, `PoreSR`, `SRGAN_2D`, `PoreSR_GAN` |
 | `--output_dir` | yes | Directory for checkpoints and training logs |
 | `--data_splits_dir` | yes | Directory containing the three index files |
+| `--stage1_checkpoint` | GAN only | Stage 1 checkpoint to fine-tune from. Required for `SRGAN_2D` and `PoreSR_GAN` |
 
-**Outputs.** Each run writes `checkpoint_best.pth` (selected by best validation MS-SSIM), periodic checkpoints, and a training log to `--output_dir`.
+**Outputs.** Stage 1 runs write `checkpoint_best.pth`, selected by best validation MS-SSIM, plus periodic checkpoints and a training log. Stage 2 runs write `checkpoint_gan_best.pth`, selected by the same criterion, plus a final-step snapshot `generator_gan_step_5000.pth`. Use the `_best` files for evaluation.
 
 ### Training configuration
 
@@ -184,7 +190,7 @@ The four factorial cells share identical training data, loss, optimiser schedule
 ## Evaluation
 
 ```bash
-# Any trained model
+# Stage 1 models
 python evaluate.py --config configs/config.json --model PoreSR \
     --checkpoint outputs/PoreSR/checkpoint_best.pth \
     --data_splits_dir configs/data_splits --output_dir results/
