@@ -18,11 +18,11 @@ Under review at *Computers & Geosciences*, 2026.
 
 PoreSR is a 2.5D residual network with CBAM attention for super-resolution of rock micro-CT images, trained on a degradation pipeline empirically calibrated against a real NXCT acquisition of Sherwood sandstone. The framework examines the relationship between image fidelity metrics and petrophysical transport properties in digital rock physics super-resolution.
 
-This repository contains the degradation pipeline, the six trained architectures, the training and evaluation code, and a synthetic worked example that runs end to end without the micro-CT dataset.
+This repository contains the calibrated degradation pipeline, implementations of the six learned model configurations, the training and evaluation code, and a synthetic worked example that runs end to end without the micro-CT dataset.
 
 ### What the study found
 
-- **Calibrated degradation.** A five-component pipeline (radiometric mapping, bias field, PSF blur, Lanczos downsampling, Poisson noise) calibrated against a real 10.62 µm NXCT acquisition. In a matched end-to-end comparison against conventional bicubic degradation, calibration reduces the mean absolute directional permeability error of the degraded volume from 65.3% to 8.4%.
+- **Calibrated degradation.** A multi-stage calibrated degradation pipeline (radiometric mapping, bias field, PSF blur, Lanczos downsampling, Poisson noise, background enforcement, post-noise smoothing) derived from a real 10.62 µm NXCT acquisition. In a matched end-to-end comparison against conventional bicubic degradation, calibration reduces the mean absolute directional permeability error of the degraded volume from 65.3% to 8.4%.
 
 - **Volumetric context and attention are non-additive.** A controlled 2×2 factorial varies five-slice input and CBAM attention independently. Neither component alone brings the mean absolute directional permeability error below 50%; together they reduce it to 15.8%.
 
@@ -53,8 +53,7 @@ PoreSR/
 ├── utils/
 │   └── checkpoint.py                  # Checkpoint manager
 ├── examples/
-│   ├── synthetic_demo.py              # End-to-end run on synthetic data
-│   └── data/                          # Small synthetic volume for testing
+│   └── synthetic_demo.py              # End-to-end run on generated data
 ├── train.py                           # Training script (Stage 1 + Stage 2)
 ├── evaluate.py                        # Inference and metrics computation
 ├── requirements.txt                   # Python dependencies
@@ -123,7 +122,7 @@ The calibration profile is specific to the University of Manchester NXCT instrum
 
 ## Training
 
-Six trained architectures are available. The four factorial cells differ only in the two factors under test.
+Six learned model configurations are implemented. The four factorial cells differ only in the two factors under test.
 
 ```bash
 # --- 2x2 factorial ---
@@ -185,7 +184,7 @@ python train.py --config configs/config.json --model PoreSR_GAN \
 | Adversarial weight | 0.001 |
 | Stage 2 generator / discriminator LR | 1e-5 / 4e-5 |
 
-The four factorial cells share identical training data, loss, optimiser schedule, and backbone. CBAM contributes 9760 parameters and the five-slice input 20 736, so trainable parameter count varies by 2.0% across the four cells. The PoreSR generator contains 1 554 996 trainable parameters.
+The four factorial cells use the same fixed data partitions and calibrated synthetic LR dataset, loss, optimiser schedule, and backbone. CBAM contributes 9760 parameters and the five-slice input 20 736, so trainable parameter count varies by 2.0% across the four cells. The PoreSR generator contains 1 554 996 trainable parameters.
 
 ## Evaluation
 
@@ -206,7 +205,7 @@ python evaluate.py --config configs/config.json --model Bicubic \
 
 Full slices are reconstructed from overlapping 64 x 64 LR patches on a stride of 48, with overlapping predictions averaged uniformly. Metrics are computed on the saved 8-bit reconstructions rather than on the float network output, so that they include the same quantisation as the reported results.
 
-Petrophysical evaluation (porosity, Stokes–Brinkman permeability, pore-throat-size distribution) was performed in GeoDict, which is commercial software and not included here. Reconstructed volumes written by `evaluate.py` are the input to that stage. Segmentation used GeoDict hysteresis thresholding at the automatic estimate minus 1.0 grey-level unit, applied identically to every volume.
+Petrophysical evaluation (porosity, Stokes–Brinkman permeability, pore-throat-size distribution) was performed in GeoDict, which is commercial software and not included here. Reconstructed volumes written by `evaluate.py` are the input to that stage. The same GeoDict hysteresis threshold-selection protocol was applied to every volume: the automatic estimate minus 1.0 grey-level unit. The resulting numerical operating threshold was image-dependent.
 
 ## Results
 
@@ -248,13 +247,15 @@ Estimating the interaction as the difference between the effect of adding CBAM i
 - **SRGAN-2D** — adversarial fine-tuning of SRResNet-2D.
 - **PoreSR-GAN** — adversarial fine-tuning of PoreSR. Included to quantify the adversarial response, not proposed as a recommended method for petrophysical applications.
 
-All trained models use the same calibrated degradation data and hyperparameters.
+All learned configurations use the same calibrated degradation dataset. The Stage 1 models share the common reconstruction-training configuration, while the adversarial variants additionally use the Stage 2 settings listed above.
 
 ## Data availability
 
 The Sherwood sandstone micro-CT dataset was acquired at the University of Manchester NXCT facility and is not distributed with this repository. Access enquiries should be directed to the corresponding author.
 
-The synthetic worked example in `examples/` allows the degradation pipeline, model definitions, training loop, and evaluation code to be exercised end to end without it.
+Trained model weights are not distributed either. This repository provides the implementation and the training and evaluation code; reproducing the reported models requires the HR dataset and the training procedure described above.
+
+The synthetic worked example in `examples/` allows the degradation pipeline, model definitions, training loop, and evaluation workflow to be exercised end to end without it.
 
 ## Limitations
 
