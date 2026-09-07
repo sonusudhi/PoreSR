@@ -1,20 +1,23 @@
 """
 PoreSR: Calibrated Degradation Pipeline
 
-Five-component degradation pipeline empirically calibrated against a real
+Multi-stage degradation pipeline empirically calibrated against a real
 lower-resolution NXCT acquisition of Sherwood sandstone (10.62 um voxel,
 25 mm FOV). Converts HR micro-CT slices (1792x1792, 4.73 um) to calibrated
 synthetic LR images (448x448, 4x degradation).
 
-Pipeline order:
+Operation order, as implemented in degrade_single_slice and listed in
+Table 2 of the paper:
     1. Rock-only radiometric mapping (affine, target: mu=0.269, sigma=0.012)
-    2. Bias field (B-spline, amplitude capped at 0.006)
-    3. PSF blur (Gaussian, sigma in [2.5, 4.0] px, 5% anisotropic)
+    2. Bias field (B-spline, multiplicative, amplitude capped at 0.006)
+    3. PSF blur (Gaussian, 5% of realisations anisotropic, ratio 1.5-3.0)
     4. Lanczos 4x downsampling (1792x1792 -> 448x448)
     5. Poisson photon-counting noise (peak in [8263, 15345])
-    6. Post-noise Gaussian smoothing (sigma=0.6)
-    7. Background enforcement
-    8. Ring artefacts disabled (absent at 25 mm FOV)
+    6. Background enforcement (threshold 0.02, detector-floor noise)
+    7. Post-noise Gaussian smoothing (sigma = 0.6 px)
+
+Ring artefact simulation is disabled: no visible ring artefacts were observed
+in the real LR acquisition at this magnification.
 
 Authors:
     Sonu Sudhikumar Seena (1), Anirban Chakraborty (2), Jingyue Hao (1), Lin Ma (1)
@@ -160,7 +163,13 @@ def apply_gaussian_blur(image, sigma, anisotropic=False, angle=0.0, ratio=1.0):
 
 
 def downsample_4x(image):
-    """Lanczos 4x downsampling via PIL. Uses uint16 intermediate to match training data generation."""
+    """
+    Lanczos 4x downsampling via PIL.
+
+    A uint16 intermediate is used so that the resampling itself is performed
+    at higher precision than the 8-bit output; quantisation to 8 bits happens
+    once, when the finished LR slice is written.
+    """
     h, w = image.shape
     img_pil = Image.fromarray((np.clip(image, 0, 1) * 65535).astype(np.uint16))
     img_down = img_pil.resize((w // 4, h // 4), Image.LANCZOS)
@@ -208,10 +217,13 @@ def sample_blur_params(calib_profile):
     clipping to [0.5, 4.0] px. Table 2 of the paper reports the base range
     for this instrument's calibration profile.
 
-    These parameters are stack-consistent: all K slices in a 2.5D stack
-    share the same blur, as the CT point-spread function is determined by
-    detector geometry and the reconstruction kernel and does not vary
-    slice-to-slice within a single scan.
+    PSF parameters are held constant within non-overlapping blocks of K
+    consecutive slices and resampled between blocks (Section 3.3), which is
+    how generate_synthetic_lr seeds them. Note that this is a block-wise
+    scheme, not a per-stack one: a 2.5D input stack whose centre slice lies
+    near a block boundary spans two PSF realisations. The CT point-spread
+    function is set by detector geometry and the reconstruction kernel, so it
+    does not vary slice to slice within a single scan.
     """
     blur_cfg = calib_profile["blur"]
 
@@ -239,6 +251,10 @@ def sample_blur_params(calib_profile):
     sigma = np.clip(sigma, 0.5, 4.0)
 
     aniso = np.random.rand() < blur_cfg["anisotropic_fraction_training"]
+    # The angle is drawn but never applied: anisotropic blur is axis-aligned.
+    # The draw is retained because removing it would shift the random stream
+    # and change the ratio sampled for anisotropic realisations, altering the
+    # generated LR data.
     angle = np.random.uniform(0, np.pi) if aniso else 0.0
     ratio = np.random.uniform(*blur_cfg["anisotropic_ratio_range"]) if aniso else 1.0
 
@@ -335,8 +351,9 @@ def generate_synthetic_lr(hr_dir, calib_profile, output_dir, k_slices=5):
     """
     Generate calibrated synthetic LR images for all HR slices.
 
-    Blur parameters are stack-consistent (redrawn every K slices).
-    Noise and bias parameters are per-slice.
+    Blur parameters are held constant within non-overlapping blocks of
+    k_slices consecutive slices and redrawn between blocks. Noise and bias
+    parameters are drawn per slice.
 
     Parameters
     ----------
