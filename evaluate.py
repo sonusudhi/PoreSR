@@ -279,8 +279,7 @@ def main():
             parser.error(
                 f"--checkpoint is required for {args.model}. Use "
                 f"checkpoint_best.pth for the Stage 1 models, or "
-                f"generator_gan_step_<gan_steps>.pth for SRGAN_2D and "
-                f"PoreSR_GAN."
+                f"checkpoint_gan_best.pth for SRGAN_2D and PoreSR_GAN."
             )
 
         # Architecture comes from the registry, so input slice count and CBAM

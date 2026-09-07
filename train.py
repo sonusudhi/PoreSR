@@ -2,8 +2,17 @@
 PoreSR: Training Script
 
 Two-stage training for the seven-method comparison:
-    Stage 1: Reconstruction (L1 + MS-SSIM + gradient loss)
-    Stage 2: Adversarial fine-tuning (PatchGAN, optional)
+    Stage 1: Reconstruction (L1 + MS-SSIM + gradient loss), 80 000 steps
+    Stage 2: Adversarial fine-tuning (PatchGAN), 5000 steps
+
+The two stages are run as separate commands. Stage 2 does not retrain a
+backbone: SRGAN_2D and PoreSR_GAN are initialised from the selected Stage 1
+checkpoint of SRResNet_2D and PoreSR respectively, passed with
+--stage1_checkpoint, and then fine-tuned adversarially (Section 4.4).
+
+Both stages select their output by best validation MS-SSIM (Section 4.5).
+Stage 1 writes checkpoint_best.pth; Stage 2 writes checkpoint_gan_best.pth,
+alongside a final-step snapshot.
 
 Supports all six trained models. The four factorial cells of Section 4.1
 vary input slice count and CBAM attention independently:
@@ -61,8 +70,12 @@ from models.discriminator import PatchDiscriminator
 from models.generator import GENERATOR_CONFIGS, build_generator, count_parameters
 from utils.checkpoint import CheckpointManager
 
-# Models that receive Stage 2 adversarial fine-tuning after Stage 1.
-GAN_MODELS = ("SRGAN_2D", "PoreSR_GAN")
+# Adversarial variants and the Stage 1 backbone each is fine-tuned from.
+STAGE1_BACKBONE = {
+    "SRGAN_2D": "SRResNet_2D",
+    "PoreSR_GAN": "PoreSR",
+}
+GAN_MODELS = tuple(STAGE1_BACKBONE)
 
 
 def set_all_seeds(seed):
@@ -250,11 +263,12 @@ def train_stage2(generator, train_loader, val_loader, config, save_dir,
 
     Uses hinge loss for the discriminator and a conservative adversarial
     weight (lambda_adv = 0.001) to limit structural disruption. The generator
-    is initialised from the best Stage 1 checkpoint.
+    must already hold the selected Stage 1 weights of its backbone.
 
-    The generator saved at the end of Stage 2 is the model at the final step.
-    Validation runs periodically for logging only; no best-checkpoint
-    selection is applied during Stage 2.
+    Validation runs every config["val_every"] steps and the generator is saved
+    to checkpoint_gan_best.pth whenever validation MS-SSIM improves, matching
+    the selection criterion of Section 4.5. A final-step snapshot is also
+    written. The returned generator is the best checkpoint, not the final one.
     """
     generator = generator.to(device)
     discriminator = PatchDiscriminator(in_channels=1).to(device)
@@ -290,6 +304,10 @@ def train_stage2(generator, train_loader, val_loader, config, save_dir,
     train_iter = iter(train_loader)
 
     val_metrics = None
+    best_val_metric = -float("inf")
+    best_path = os.path.join(save_dir, "checkpoint_gan_best.pth")
+    val_every = config["val_every"]
+
     pbar = tqdm(total=config["gan_steps"], desc=f"{model_name} GAN", unit="step")
 
     for step in range(config["gan_steps"]):
@@ -332,7 +350,7 @@ def train_stage2(generator, train_loader, val_loader, config, save_dir,
         pbar.set_postfix(G=f"{loss_g.item():.4f}", D=f"{loss_d.item():.4f}")
         pbar.update(1)
 
-        if (step + 1) % 1000 == 0 or step == config["gan_steps"] - 1:
+        if (step + 1) % val_every == 0 or step == config["gan_steps"] - 1:
             val_metrics = validate(generator, val_loader, device,
                                    config["mixed_precision"])
             log(
@@ -341,12 +359,25 @@ def train_stage2(generator, train_loader, val_loader, config, save_dir,
                 f"PSNR: {val_metrics['psnr']:.2f}, "
                 f"MS-SSIM: {val_metrics['ms_ssim']:.4f}"
             )
+
+            # Select on validation MS-SSIM, as in Stage 1 (Section 4.5).
+            if val_metrics["ms_ssim"] > best_val_metric:
+                best_val_metric = val_metrics["ms_ssim"]
+                torch.save({
+                    "step": step + 1,
+                    "model_state_dict": generator.state_dict(),
+                    "discriminator_state_dict": discriminator.state_dict(),
+                    "val_metrics": val_metrics,
+                    "best_val_metric": best_val_metric,
+                }, best_path)
+                log(f"New best GAN checkpoint at step {step + 1}: "
+                    f"MS-SSIM = {best_val_metric:.4f}")
+
             generator.train()
 
     pbar.close()
 
-    # Save the final Stage 2 generator. This is the checkpoint used for
-    # evaluation of the adversarial variants.
+    # Final-step snapshot, retained for reference.
     gan_path = os.path.join(
         save_dir, f"generator_gan_step_{config['gan_steps']}.pth"
     )
@@ -356,7 +387,16 @@ def train_stage2(generator, train_loader, val_loader, config, save_dir,
         "discriminator_state_dict": discriminator.state_dict(),
         "val_metrics": val_metrics,
     }, gan_path)
-    log(f"GAN model saved: {gan_path}")
+    log(f"Final-step snapshot saved: {gan_path}")
+
+    # Return the selected checkpoint rather than the final step.
+    if os.path.exists(best_path):
+        checkpoint = torch.load(best_path, map_location=device,
+                                weights_only=False)
+        generator.load_state_dict(checkpoint["model_state_dict"])
+        log(f"Loaded best GAN checkpoint from step {checkpoint['step']}: "
+            f"MS-SSIM = {checkpoint['best_val_metric']:.4f}")
+
     log("Stage 2 (GAN) training complete")
 
     return generator
@@ -376,7 +416,24 @@ def main():
                         help="Directory for checkpoints and logs")
     parser.add_argument("--data_splits_dir", type=str, required=True,
                         help="Directory containing train/val/test indices")
+    parser.add_argument("--stage1_checkpoint", type=str, default=None,
+                        help="Stage 1 checkpoint to initialise adversarial "
+                             "fine-tuning from. Required for SRGAN_2D and "
+                             "PoreSR_GAN; ignored otherwise.")
     args = parser.parse_args()
+
+    if args.model in GAN_MODELS and args.stage1_checkpoint is None:
+        parser.error(
+            f"--stage1_checkpoint is required for {args.model}. It should be "
+            f"the checkpoint_best.pth produced by training "
+            f"{STAGE1_BACKBONE[args.model]}. Stage 2 fine-tunes that model for "
+            f"5000 adversarial steps and does not retrain a backbone "
+            f"(Section 4.4)."
+        )
+    if args.model not in GAN_MODELS and args.stage1_checkpoint is not None:
+        parser.error(
+            f"--stage1_checkpoint applies only to {' and '.join(GAN_MODELS)}."
+        )
 
     if not torch.cuda.is_available():
         sys.exit(
@@ -458,24 +515,32 @@ def main():
           f"CBAM={use_cbam} | K={k}")
     print(f"Trainable parameters: {count_parameters(model):,}")
 
-    # Stage 1: Reconstruction
-    model = train_stage1(
-        model, train_loader, val_loader, config, args.output_dir, args.model,
-        device
-    )
-
-    # Stage 2: Adversarial fine-tuning, for the adversarial variants only
     if args.model in GAN_MODELS:
+        # Stage 2 only. Load the selected Stage 1 weights of the backbone;
+        # no Stage 1 training is performed here.
+        backbone = STAGE1_BACKBONE[args.model]
+        checkpoint = torch.load(args.stage1_checkpoint, map_location=device,
+                                weights_only=False)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        print(f"Initialised from {backbone} Stage 1 checkpoint: "
+              f"{args.stage1_checkpoint}")
+        if "best_val_metric" in checkpoint:
+            print(f"  Stage 1 validation MS-SSIM: "
+                  f"{checkpoint['best_val_metric']:.4f}")
+
         model = train_stage2(
             model, train_loader, val_loader, config, args.output_dir,
             args.model, device
         )
         print(
             f"Training complete. Evaluate this model using "
-            f"generator_gan_step_{config['gan_steps']}.pth in "
-            f"{args.output_dir}"
+            f"checkpoint_gan_best.pth in {args.output_dir}"
         )
     else:
+        model = train_stage1(
+            model, train_loader, val_loader, config, args.output_dir,
+            args.model, device
+        )
         print(
             f"Training complete. Evaluate this model using "
             f"checkpoint_best.pth in {args.output_dir}"
