@@ -8,7 +8,8 @@ distributed with this repository.
 
 The demo is a functional test, not a reproduction of the published results.
 It trains for a few hundred steps on a 40-slice synthetic volume, whereas the
-reported models were trained for 80 000 steps on 4182 real HR slices. The
+reported models were trained for 80 000 steps from a fixed 4182-slice real HR
+training partition. The
 reconstruction quality it reaches is not meaningful; what it demonstrates is
 that every stage of the workflow runs and produces output of the expected
 shape and dynamic range.
@@ -29,8 +30,8 @@ Options:
 
 Outputs, written to the output directory:
 
-    hr/              synthetic HR slices, 16-bit TIFF
-    lr/              calibrated synthetic LR slices, 16-bit TIFF
+    hr/              synthetic HR slices, 8-bit TIFF
+    lr/              calibrated synthetic LR slices, 8-bit TIFF
     splits/          train, validation and test index files
     comparison.png   HR, LR, bicubic and PoreSR for one test slice
     summary.txt      PSNR and SSIM for bicubic and PoreSR
@@ -297,7 +298,7 @@ def main():
     print(f"  device        {device}")
     print(f"  volume        {args.slices} slices of {args.size} x {args.size}")
     print(f"  training      {args.steps} steps "
-          f"(published models: 80 000 steps on 4182 real slices)")
+          f"(published models: 80 000 steps from a 4182-slice partition)")
     print(f"  output        {out}")
 
     if not CALIB_PATH.exists():
